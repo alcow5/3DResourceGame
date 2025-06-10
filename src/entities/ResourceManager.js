@@ -24,28 +24,48 @@ export class ResourceManager {
         const resource = new THREE.Group();
         resource.position.set(x, y, z);
 
+        // Set resource properties immediately
+        resource.userData = {
+            type: type,
+            health: gameConfig.resources[type].health,
+            maxHealth: gameConfig.resources[type].health,
+            respawnTime: gameConfig.resources[type].respawnTime,
+            isCollected: false
+        };
+
         this.loader.load(
             gameConfig.resources[type].model,
             (gltf) => {
-                resource.add(gltf.scene);
+                const model = gltf.scene;
+                resource.add(model);
                 
                 // Add collision box
-                const box = new THREE.Box3().setFromObject(gltf.scene);
+                const box = new THREE.Box3().setFromObject(model);
                 const size = box.getSize(new THREE.Vector3());
-                const collisionBox = new THREE.Box3(
-                    new THREE.Vector3(-size.x/2, 0, -size.z/2),
-                    new THREE.Vector3(size.x/2, size.y, size.z/2)
+                
+                // Create a visible collision box for debugging
+                const collisionBox = new THREE.Mesh(
+                    new THREE.BoxGeometry(size.x, size.y, size.z),
+                    new THREE.MeshBasicMaterial({ 
+                        color: 0xff0000,
+                        wireframe: true,
+                        visible: false // Start invisible, will be toggled by debug mode
+                    })
                 );
+                collisionBox.position.copy(resource.position);
+                collisionBox.position.y = size.y / 2; // Center the box vertically
+                
+                // Store the collision box in the resource's userData
                 resource.userData.collisionBox = collisionBox;
+                resource.userData.collisionBoxMesh = collisionBox;
+                
+                this.scene.add(collisionBox);
+            },
+            undefined,
+            (error) => {
+                console.error('Error loading resource model:', error);
             }
         );
-
-        // Set resource properties
-        resource.userData.type = type;
-        resource.userData.health = gameConfig.resources[type].health;
-        resource.userData.maxHealth = gameConfig.resources[type].health;
-        resource.userData.respawnTime = gameConfig.resources[type].respawnTime;
-        resource.userData.isCollected = false;
 
         this.scene.add(resource);
         this.resources.set(resource.uuid, resource);
@@ -56,10 +76,16 @@ export class ResourceManager {
     createRandomResources() {
         const resourceCount = 150; // Number of each resource type to create
 
-        // Create trees
-        for (let i = 0; i < resourceCount; i++) {
+        // Create basic trees (80% chance)
+        for (let i = 0; i < resourceCount * 0.8; i++) {
             const position = this.getRandomPosition();
-            this.createResource('tree', position.x, position.y, position.z);
+            this.createResource('basicTree', position.x, position.y, position.z);
+        }
+
+        // Create advanced trees (20% chance)
+        for (let i = 0; i < resourceCount * 0.2; i++) {
+            const position = this.getRandomPosition();
+            this.createResource('advancedTree', position.x, position.y, position.z);
         }
 
         // Create rocks
@@ -107,18 +133,52 @@ export class ResourceManager {
     }
 
     collectResource(resource) {
+        if (!resource.userData) {
+            console.error('Resource has no userData:', resource);
+            return false;
+        }
+
         const type = resource.userData.type;
+        if (!type) {
+            console.error('Resource has no type:', resource);
+            return false;
+        }
+
+        // Check if player has required level
+        const requiredLevel = gameConfig.resources[type].requiredLevel;
+        if (type.includes('Tree')) {
+            if (gameState.skills.lumberjack.level < requiredLevel) {
+                console.log(`Need Lumberjack Level ${requiredLevel} to gather from ${gameConfig.resources[type].name}`);
+                return false;
+            }
+        } else if (type === 'rock') {
+            if (gameState.skills.mining.level < requiredLevel) {
+                console.log(`Need Mining Level ${requiredLevel} to gather from ${gameConfig.resources[type].name}`);
+                return false;
+            }
+        }
+
         resource.userData.health = Math.max(0, resource.userData.health - 1);
         
-        if (type === 'tree') {
-            gameState.addResource('wood');
-            gameState.addXP('lumberjack');
+        if (type.includes('Tree')) {
+            const amount = gameConfig.resources[type].resourceAmount;
+            const xpAmount = gameConfig.resources[type].xpAmount;
+            gameState.addResource('wood', amount);
+            gameState.addXP('lumberjack', xpAmount);
+            console.log(`Gathered ${amount} wood from ${gameConfig.resources[type].name} and gained ${xpAmount} XP`);
         } else if (type === 'rock') {
-            gameState.addResource('ore');
-            gameState.addXP('mining');
+            const amount = gameConfig.resources[type].resourceAmount;
+            const xpAmount = gameConfig.resources[type].xpAmount;
+            gameState.addResource('ore', amount);
+            gameState.addXP('mining', xpAmount);
+            console.log(`Gathered ${amount} ore from ${gameConfig.resources[type].name} and gained ${xpAmount} XP`);
         }
         
         if (resource.userData.health <= 0) {
+            // Remove the collision box mesh
+            if (resource.userData.collisionBoxMesh) {
+                this.scene.remove(resource.userData.collisionBoxMesh);
+            }
             this.removeResource(resource);
             return true; // Resource was depleted
         }

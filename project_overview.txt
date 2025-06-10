@@ -1,0 +1,100 @@
+3D Resource Gathering Game Project Overview
+
+Project Structure:
+/src
+  /core
+    - InputManager.js: Handles keyboard and mouse input
+    - gameState.js: Manages game state, inventory, and skills
+  /entities
+    - ResourceManager.js: Handles resource creation, collection, and respawning
+  /config
+    - gameConfig.js: Contains all game configuration settings
+  /utils
+    - (utility functions)
+
+Key Components:
+
+1. Resource System:
+   - Two types of trees:
+     * Basic Tree (tree1.glb)
+       - Level 1 required
+       - 1 wood per gather
+       - 15 XP per gather
+       - 5 health
+       - 30s respawn
+     * Advanced Tree (tree2.glb)
+       - Level 5 required
+       - 3 wood per gather
+       - 150 XP per gather
+       - 8 health
+       - 45s respawn
+   - Rocks:
+     * Level 1 required
+     * 1 ore per gather
+     * 10 XP per gather
+     * 5 health
+     * 45s respawn
+
+2. Resource Manager Features:
+   - Spawns resources in random positions
+   - 80% basic trees, 20% advanced trees
+   - Handles resource collection
+   - Manages respawning
+   - Collision detection
+   - Debug mode with visible collision boxes
+
+3. Game State:
+   - Tracks inventory (wood, ore)
+   - Manages skills (lumberjack, mining)
+   - Handles XP and leveling
+   - Updates UI elements
+
+4. Input System:
+   - WASD/Arrow keys for movement
+   - Right-click drag for camera rotation
+   - Left-click for resource gathering
+   - 'D' key to toggle debug mode
+
+5. Debug Features:
+   - Toggle with 'D' key
+   - Shows red wireframe collision boxes
+   - Console logging for resource interactions
+   - Resource counts and health display
+
+6. Resource Collection Mechanics:
+   - Level requirements
+   - Health system (multiple hits to deplete)
+   - XP rewards
+   - Resource amounts
+   - Respawn timers
+
+7. File Structure:
+   - main.js: Main game loop and setup
+   - assets/: Contains 3D models (tree1.glb, tree2.glb, rock1.glb)
+   - src/: Core game logic and configuration
+
+8. Configuration (gameConfig.js):
+   - Resource settings (health, respawn times, XP)
+   - Camera settings
+   - Movement settings
+   - Collection settings
+   - Spawn area boundaries
+
+9. Current Features:
+   - 3D resource gathering
+   - Skill-based progression
+   - Multiple resource types
+   - Debug visualization
+   - Resource respawning
+   - Level requirements
+   - XP system
+
+10. Recent Changes:
+    - Added advanced trees with higher XP rewards
+    - Implemented proper collision detection
+    - Added debug mode
+    - Improved resource management
+    - Added level requirements
+    - Balanced XP rewards
+
+This overview should help quickly understand the project structure, key features, and recent changes. The game is a 3D resource gathering game with progression through skill levels and different types of resources to gather. 

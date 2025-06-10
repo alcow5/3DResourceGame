@@ -30,19 +30,36 @@ export const gameConfig = {
     // Collection configuration
     collectionConfig: {
         range: 2, // Maximum distance for resource collection
-        xpPerResource: 10 // XP gained per resource collected
+        defaultXpPerResource: 10 // Default XP gained per resource collected
     },
 
     resources: {
-        tree: {
+        basicTree: {
             health: 5,
             respawnTime: 30000, // 30 seconds
-            model: 'assets/tree1.glb'
+            model: 'assets/tree1.glb',
+            name: 'Basic Tree',
+            requiredLevel: 1,
+            resourceAmount: 1,
+            xpAmount: 15 // 15 XP per click
+        },
+        advancedTree: {
+            health: 8,
+            respawnTime: 45000, // 45 seconds
+            model: 'assets/tree2.glb',
+            name: 'Advanced Tree',
+            requiredLevel: 5,
+            resourceAmount: 3,
+            xpAmount: 150 // 150 XP per click
         },
         rock: {
             health: 5,
             respawnTime: 45000, // 45 seconds
-            model: 'assets/rock1.glb'
+            model: 'assets/rock1.glb',
+            name: 'Rock',
+            requiredLevel: 1,
+            resourceAmount: 1,
+            xpAmount: 10 // 10 XP per click
         }
     }
 }; 

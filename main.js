@@ -4,13 +4,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { gameConfig } from './src/config/gameConfig.js';
 import { gameState } from './src/core/gameState.js';
 import { ResourceManager } from './src/entities/ResourceManager.js';
-import { InputManager } from './src/core/InputManager.js';
 
 // Scene setup
 const scene = new THREE.Scene();
 console.log('Scene created');
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 10); // Position camera higher and further back
+camera.lookAt(0, 0, 0);
 console.log('Camera created');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -18,10 +19,11 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById('game-container').appendChild(renderer.domElement);
 console.log('Renderer initialized and added to DOM');
 
-// Camera setup
-let cameraDistance = gameConfig.cameraConfig.initialDistance;
-let cameraHeight = gameConfig.cameraConfig.initialHeight;
+// Camera controls
+let isRotatingCamera = false;
 let cameraAngle = 0;
+const cameraDistance = 10;
+const cameraHeight = 5;
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -111,80 +113,194 @@ scene.add(ground);
 console.log('Ground added to scene');
 
 // Character setup
-const characterGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
-const characterMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const character = new THREE.Mesh(characterGeometry, characterMaterial);
-character.position.y = 0.5; // Half height of character
-scene.add(character);
-console.log('Character created');
+let character;
+let mixer; // Animation mixer
+let walkAction; // Walking animation
+const loader = new GLTFLoader();
+console.log('Starting to load character model...');
+loader.load(
+    'assets/charwalk.glb',
+    (gltf) => {
+        console.log('Character model loaded successfully!');
+        character = gltf.scene;
+        character.scale.set(1, 1, 1);
+        character.position.set(0, 0, 0);
+        scene.add(character);
 
-// Initialize managers
-const resourceManager = new ResourceManager(scene);
-const inputManager = new InputManager();
+        // Set up animations
+        mixer = new THREE.AnimationMixer(character);
+        if (gltf.animations && gltf.animations.length > 0) {
+            console.log('Found animations:', gltf.animations.map(a => a.name));
+            walkAction = mixer.clipAction(gltf.animations[0]); // Use first animation
+            walkAction.play();
+        } else {
+            console.log('No animations found in the model');
+        }
+    },
+    (xhr) => {
+        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+    },
+    (error) => {
+        console.error('Error loading character model:', error);
+    }
+);
 
 // Initialize resource manager
-resourceManager.createRandomResources();
+const resourceManager = new ResourceManager(scene);
 
-// Model loading
-let treeModel, rockModel;
+// Update the click handler to use ResourceManager
+window.addEventListener('click', (event) => {
+    if (event.button === 0) { // Left click
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // Calculate mouse position in normalized device coordinates
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Get all resources from the scene
+        const resources = Array.from(resourceManager.resources.values());
+        
+        if (debugMode) {
+            console.log('Checking for resource intersections...');
+            console.log('Number of resources:', resources.length);
+        }
+        
+        const intersects = raycaster.intersectObjects(resources, true); // true to check descendants
+        
+        if (debugMode) {
+            console.log('Intersections found:', intersects.length);
+        }
+        
+        if (intersects.length > 0) {
+            // Find the parent resource group
+            let resource = intersects[0].object;
+            while (resource && !resourceManager.resources.has(resource.uuid)) {
+                resource = resource.parent;
+            }
+            
+            if (resource && resourceManager.resources.has(resource.uuid)) {
+                if (debugMode) {
+                    console.log('Clicked resource:', resource.userData.type);
+                    console.log('Health:', resource.userData.health);
+                }
+                
+                const wasDepleted = resourceManager.collectResource(resource);
+                if (wasDepleted) {
+                    console.log(`${resource.userData.type} was depleted`);
+                }
+            }
+        }
+    }
+});
+
+// Add a key to toggle debug mode
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'd') {
+        debugMode = !debugMode;
+        // Update visibility of collision boxes
+        resourceManager.resources.forEach(resource => {
+            if (resource.userData.collisionBox) {
+                resource.userData.collisionBox.visible = debugMode;
+            }
+        });
+        console.log('Debug mode:', debugMode ? 'ON' : 'OFF');
+    }
+});
+
+// Create resources after models are loaded
+let modelsLoaded = 0;
+const totalModels = 2;
+
+function checkAllModelsLoaded() {
+    modelsLoaded++;
+    if (modelsLoaded === totalModels) {
+        console.log('All models loaded, spawning resources...');
+        resourceManager.createRandomResources();
+    }
+}
 
 // Load models
-const loader = new GLTFLoader();
 loader.load('assets/tree1.glb', (gltf) => {
-    treeModel = gltf.scene;
-    // Create initial trees
-    for (let i = 0; i < 5; i++) {
-        resourceManager.createResource('tree', treeModel);
-    }
+    console.log('Tree 1 model loaded');
+    checkAllModelsLoaded();
+}, 
+(xhr) => {
+    console.log('Tree 1 loading progress:', (xhr.loaded / xhr.total * 100) + '%');
+},
+(error) => {
+    console.error('Error loading Tree 1:', error);
 });
 
-loader.load('assets/rock1.glb', (gltf) => {
-    rockModel = gltf.scene;
-    // Create initial rocks
-    for (let i = 0; i < 5; i++) {
-        resourceManager.createResource('rock', rockModel);
-    }
+loader.load('assets/tree2.glb', (gltf) => {
+    console.log('Tree 2 model loaded');
+    checkAllModelsLoaded();
+},
+(xhr) => {
+    console.log('Tree 2 loading progress:', (xhr.loaded / xhr.total * 100) + '%');
+},
+(error) => {
+    console.error('Error loading Tree 2:', error);
 });
 
-// Keyboard event listeners
+// Add debug mode
+let debugMode = true;
+
+// Keyboard controls
+const keys = {
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
+    w: false,
+    a: false,
+    s: false,
+    d: false
+};
+
+// Add keyboard event listeners
 window.addEventListener('keydown', (event) => {
-    const key = event.key.toLowerCase(); // Convert to lowercase for WASD
-    if (inputManager.isKeyPressed(key)) {
-        console.log('Key pressed:', key);
+    const key = event.key.toLowerCase();
+    if (keys.hasOwnProperty(key)) {
+        keys[key] = true;
+    }
+    if (event.key === 'd') {
+        debugMode = !debugMode;
+        console.log('Debug mode:', debugMode ? 'ON' : 'OFF');
     }
 });
 
 window.addEventListener('keyup', (event) => {
-    const key = event.key.toLowerCase(); // Convert to lowercase for WASD
-    if (inputManager.isKeyPressed(key)) {
-        console.log('Key released:', key);
+    const key = event.key.toLowerCase();
+    if (keys.hasOwnProperty(key)) {
+        keys[key] = false;
     }
 });
 
-// Mouse event handlers
+// Mouse event listeners for camera control
 window.addEventListener('mousedown', (event) => {
     if (event.button === 2) { // Right mouse button
-        inputManager.startRotatingCamera();
-        controls.enabled = true;
+        isRotatingCamera = true;
     }
 });
 
 window.addEventListener('mouseup', (event) => {
     if (event.button === 2) { // Right mouse button
-        inputManager.stopRotatingCamera();
-        controls.enabled = false;
+        isRotatingCamera = false;
     }
 });
 
+window.addEventListener('mousemove', (event) => {
+    if (isRotatingCamera) {
+        cameraAngle -= event.movementX * 0.01; // Adjust rotation speed as needed
+    }
+});
+
+// Prevent context menu on right click
 window.addEventListener('contextmenu', (event) => {
     event.preventDefault();
-});
-
-// Mouse movement handler
-window.addEventListener('mousemove', (event) => {
-    if (inputManager.isRotatingCamera()) {
-        cameraAngle -= event.movementX * gameConfig.cameraConfig.rotationSpeed;
-    }
 });
 
 // Mouse wheel handler for zoom
@@ -198,78 +314,82 @@ window.addEventListener('wheel', (event) => {
     );
 });
 
-// Click handler for resource collection
-window.addEventListener('click', (event) => {
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    
-    raycaster.setFromCamera(mouse, camera);
-    
-    const objectsToCheck = scene.children.filter(obj => obj !== character);
-    const intersects = raycaster.intersectObjects(objectsToCheck, true);
-    
-    if (intersects.length > 0) {
-        let clickedObject = intersects[0].object;
-        while (clickedObject.parent && clickedObject.parent !== scene && !clickedObject.userData.type) {
-            clickedObject = clickedObject.parent;
-        }
-        
-        if (clickedObject.userData.type === 'tree' || clickedObject.userData.type === 'rock') {
-            const resourcePosition = new THREE.Vector3();
-            clickedObject.getWorldPosition(resourcePosition);
-            
-            const distance = character.position.distanceTo(resourcePosition);
-            if (distance <= gameConfig.collectionConfig.range) {
-                if (resourceManager.collectResource(clickedObject)) {
-                    resourceManager.scheduleRespawn(clickedObject.userData.type, 
-                        clickedObject.userData.type === 'tree' ? treeModel : rockModel);
-                }
-            }
-        }
-    }
-});
+// Add clock for animation timing
+const clock = new THREE.Clock();
 
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
-    
-    // Calculate camera position based on angle and distance
-    const cameraX = character.position.x + Math.sin(cameraAngle) * cameraDistance;
-    const cameraZ = character.position.z + Math.cos(cameraAngle) * cameraDistance;
-    camera.position.set(cameraX, character.position.y + cameraHeight, cameraZ);
-    camera.lookAt(character.position);
-    
-    // Get camera's forward and right vectors for character movement
-    const cameraDirection = new THREE.Vector3();
-    camera.getWorldDirection(cameraDirection);
-    cameraDirection.y = 0;
-    cameraDirection.normalize();
-    
-    const cameraRight = new THREE.Vector3();
-    cameraRight.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0));
-    cameraRight.normalize();
-    
-    // Update character movement relative to camera view
-    if (inputManager.isKeyPressed('w') || inputManager.isKeyPressed('ArrowUp')) {
-        const moveDirection = cameraDirection.clone();
-        character.position.add(moveDirection.multiplyScalar(gameConfig.movementConfig.moveSpeed));
+
+    // Update animations
+    if (mixer) {
+        const delta = clock.getDelta();
+        mixer.update(delta);
     }
-    if (inputManager.isKeyPressed('s') || inputManager.isKeyPressed('ArrowDown')) {
-        const moveDirection = cameraDirection.clone();
-        character.position.sub(moveDirection.multiplyScalar(gameConfig.movementConfig.moveSpeed));
+
+    // Update character position if it exists
+    if (character) {
+        // Get camera's forward and right vectors
+        const cameraDirection = new THREE.Vector3();
+        camera.getWorldDirection(cameraDirection);
+        cameraDirection.y = 0; // Keep movement on the ground plane
+        cameraDirection.normalize();
+
+        const cameraRight = new THREE.Vector3();
+        cameraRight.crossVectors(new THREE.Vector3(0, 1, 0), cameraDirection);
+        cameraRight.normalize();
+
+        // Calculate movement direction based on input
+        const moveDirection = new THREE.Vector3(0, 0, 0);
+        
+        if (keys.ArrowUp || keys.w) {
+            moveDirection.add(cameraDirection);
+        }
+        if (keys.ArrowDown || keys.s) {
+            moveDirection.sub(cameraDirection);
+        }
+        if (keys.ArrowLeft || keys.a) {
+            moveDirection.add(cameraRight);
+        }
+        if (keys.ArrowRight || keys.d) {
+            moveDirection.sub(cameraRight);
+        }
+
+        // Normalize and apply movement
+        if (moveDirection.length() > 0) {
+            moveDirection.normalize();
+            character.position.add(moveDirection.multiplyScalar(0.1));
+
+            // Rotate character to face movement direction
+            const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
+            character.rotation.y = targetRotation;
+
+            // Ensure walking animation is playing
+            if (walkAction && !walkAction.isRunning()) {
+                walkAction.play();
+            }
+        } else {
+            // Stop walking animation when not moving
+            if (walkAction && walkAction.isRunning()) {
+                walkAction.stop();
+            }
+        }
     }
-    if (inputManager.isKeyPressed('a') || inputManager.isKeyPressed('ArrowLeft')) {
-        const moveDirection = cameraRight.clone();
-        character.position.sub(moveDirection.multiplyScalar(gameConfig.movementConfig.moveSpeed));
+
+    // Update camera position to orbit around character
+    if (character) {
+        // Calculate camera position based on angle and distance
+        const cameraX = character.position.x + Math.sin(cameraAngle) * cameraDistance;
+        const cameraZ = character.position.z + Math.cos(cameraAngle) * cameraDistance;
+        
+        camera.position.set(
+            cameraX,
+            character.position.y + cameraHeight,
+            cameraZ
+        );
+        camera.lookAt(character.position);
     }
-    if (inputManager.isKeyPressed('d') || inputManager.isKeyPressed('ArrowRight')) {
-        const moveDirection = cameraRight.clone();
-        character.position.add(moveDirection.multiplyScalar(gameConfig.movementConfig.moveSpeed));
-    }
-    
+
     renderer.render(scene, camera);
 }
 
@@ -280,6 +400,8 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Start the animation loop
+console.log('Starting animation loop...');
 animate();
 console.log('Animation started');
 
@@ -289,4 +411,30 @@ function updateCamera() {
     const z = character.position.z + cameraDistance * Math.cos(cameraAngle);
     camera.position.set(x, character.position.y + cameraHeight, z);
     camera.lookAt(character.position);
-} 
+}
+
+// Clean up resources when the page is unloaded
+window.addEventListener('beforeunload', () => {
+    // Dispose of geometries and materials
+    scene.traverse((object) => {
+        if (object.isMesh) {
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => material.dispose());
+                } else {
+                    object.material.dispose();
+                }
+            }
+        }
+    });
+    
+    // Clear the scene
+    while(scene.children.length > 0) { 
+        scene.remove(scene.children[0]); 
+    }
+    
+    // Clear the resource manager
+    resourceManager.resources.clear();
+    resourceManager.respawnQueue.clear();
+}); 
