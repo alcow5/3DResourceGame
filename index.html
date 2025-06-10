@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Resource Gathering Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="ui-overlay">
+        <div class="inventory">
+            <h2>Inventory</h2>
+            <div>Wood: <span id="wood-count">0</span></div>
+            <div>Ore: <span id="ore-count">0</span></div>
+        </div>
+        <div class="skills">
+            <div class="skill">
+                <h3>Lumberjack</h3>
+                <div>Level: <span id="lumberjack-level">1</span></div>
+                <div>XP: <span id="lumberjack-xp">0</span></div>
+            </div>
+            <div class="skill">
+                <h3>Mining</h3>
+                <div>Level: <span id="mining-level">1</span></div>
+                <div>XP: <span id="mining-xp">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game script -->
+    <script type="module" src="/main.js"></script>
+</body>
+</html> 
